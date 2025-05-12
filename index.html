@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Настройка Cron Задачи — Pterodactyl</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+    <style>
+        body {
+            background: linear-gradient(to bottom right, #1e293b, #0f172a);
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: max-content;
+            max-width: 250px;
+            background-color: #374151;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.875rem;
+            line-height: 1.25rem;
+            white-space: pre-line;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+
+<body class="text-white min-h-screen flex items-center justify-center px-4">
+    <div class="bg-gray-900 shadow-xl rounded-xl p-8 max-w-2xl w-full space-y-6 border border-gray-700">
+        <h1 class="text-3xl font-bold text-blue-400">Настройка Cron Задачи</h1>
+        <p class="text-sm text-gray-400">Введите расписание в формате: <code
+                class="bg-gray-800 px-2 py-1 rounded text-blue-300">минуты часы день_месяца месяц день_недели</code></p>
+
+        <form id="cronForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Поля ввода, как у тебя -->
+            <!-- ... (оставляем как есть) -->
+            <!-- Минуты -->
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    Минуты
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">Значения от 0 до 59.\n* — каждую минуту\n0,15,30,45 — каждые 15
+                            минут</span>
+                    </span>
+                </label>
+                <input type="text" name="minute" placeholder="*"
+                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700" required />
+            </div>
+
+            <!-- Часы -->
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    Часы
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">Значения от 0 до 23.\n* — каждый час\n3 — в 3:00</span>
+                    </span>
+                </label>
+                <input type="text" name="hour" placeholder="*"
+                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700" required />
+            </div>
+
+            <!-- День месяца -->
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    День месяца
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">1–31. * — каждый день\n1 — только 1 числа</span>
+                    </span>
+                </label>
+                <input type="text" name="day" placeholder="*"
+                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700" />
+            </div>
+
+            <!-- Месяц -->
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    Месяц
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">1–12. * — каждый месяц\n12 — только в декабре</span>
+                    </span>
+                </label>
+                <input type="text" name="month" placeholder="*"
+                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700" />
+            </div>
+
+            <!-- День недели -->
+            <div>
+                <label class="block text-sm font-semibold mb-1">
+                    День недели
+                    <span class="tooltip">🛈
+                        <span class="tooltiptext">0–6 (0 — воскресенье).\n* — любой день\n1 — понедельник</span>
+                    </span>
+                </label>
+                <input type="text" name="weekday" placeholder="*"
+                    class="w-full bg-gray-800 text-white rounded px-3 py-2 border border-gray-700" />
+            </div>
+
+            <!-- Кнопка -->
+            <div class="md:col-span-2 flex justify-end mt-4">
+                <button type="submit"
+                    class="bg-blue-600 hover:bg-blue-700 transition text-white font-semibold py-2 px-6 rounded-lg shadow">
+                    Сгенерировать
+                </button>
+            </div>
+        </form>
+
+        <!-- Результат -->
+        <div id="result" class="hidden bg-gray-800 border border-blue-500 rounded-lg p-4 mt-4 animate-fadeIn">
+            <h2 class="text-lg font-semibold text-blue-300 mb-2">Расписание:</h2>
+            <div id="cronFormatted" class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-white text-sm"></div>
+
+            <h2 class="text-lg font-semibold text-green-400 mb-2 mt-4">Человеческий перевод:</h2>
+            <div class="text-white text-sm" id="cronHuman"></div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('cronForm');
+        const resultBlock = document.getElementById('result');
+        const human = document.getElementById('cronHuman');
+
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const data = new FormData(form);
+
+            const minute = data.get('minute') || '*';
+            const hour = data.get('hour') || '*';
+            const day = data.get('day') || '*';
+            const month = data.get('month') || '*';
+            const weekday = data.get('weekday') || '*';
+
+            const fields = [
+                ['Minute', minute],
+                ['Hour', hour],
+                ['Day (Month)', day],
+                ['Month', month],
+                ['Day (Week)', weekday],
+            ];
+
+            document.getElementById('cronFormatted').innerHTML = fields.map(
+                ([label, value]) => `
+          <div class="bg-gray-700 rounded p-2">
+            <div class="text-blue-300 font-semibold">${label}</div>
+            <div>${value}</div>
+          </div>
+        `
+            ).join('');
+
+            resultBlock.classList.remove('hidden');
+
+            const weekdayNames = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+            const weekdayText = weekday === '*' ? '' : ` (${weekdayNames[parseInt(weekday)] || 'день недели ' + weekday})`;
+            const dayText = day === '*' ? '' : ` ${day} числа`;
+            const monthText = month === '*' ? '' : ` в месяце №${month}`;
+
+            const resultText = `Будет выполняться в ${minute === '*' ? 'каждую минуту' : minute + ' мин.'}, 
+в ${hour === '*' ? 'каждый час' : hour + ':00'}${dayText}${monthText}${weekdayText}.`;
+
+            human.textContent = resultText;
+        });
+    </script>
+
+    <style>
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.4s ease-out;
+        }
+    </style>
+</body>
+
+</html>
